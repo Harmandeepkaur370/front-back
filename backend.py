@@ -18,21 +18,113 @@ def init_db():
         )
     """)
 
-    # Patients table
+    # Patient table (Singular - Exact Columns)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS patients (
+        CREATE TABLE IF NOT EXISTS patient (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            age INTEGER,
+            disease TEXT,
+            username TEXT,
+            prediction TEXT
+        )
+    """)
+
+    # History table (For sidebar visibility)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT,
             name TEXT,
             age INTEGER,
-            gender TEXT,
-            disease_type TEXT,
-            predicted TEXT
+            disease TEXT,
+            risk TEXT,
+            time TEXT,
+            prediction TEXT
         )
     """)
 
+    # Reports table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            patient_name TEXT,
+            disease TEXT,
+            file_path TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Analytics table (Exact Columns, no underscores)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS analytics (
+            id INTEGER PRIMARY KEY,
+            totalpatients INTEGER DEFAULT 0,
+            heartpositive INTEGER DEFAULT 0,
+            diabetespositive INTEGER DEFAULT 0
+        )
+    """)
+
+    # Initialize analytics row 1 if not exists
+    cursor.execute("SELECT COUNT(*) FROM analytics WHERE id = 1")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("INSERT INTO analytics (id, totalpatients, heartpositive, diabetespositive) VALUES (1, 0, 0, 0)")
+
     conn.commit()
     conn.close()
+
+# ==========================
+# UNIFIED DATA PIPELINE
+# ==========================
+
+def update_all_data(user, name, age, disease, risk, prediction, file_path):
+    import datetime
+    conn = sqlite3.connect("hospital.db")
+    cursor = conn.cursor()
+    
+    try:
+        # ✅ Issue 1: patient Table Update
+        cursor.execute("""
+            INSERT INTO patient (name, age, disease, username, prediction)
+            VALUES (?, ?, ?, ?, ?)
+        """, (name, age, disease, user, prediction))
+
+        # ✅ History Table Update (internal use)
+        time_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        cursor.execute("""
+            INSERT INTO history (username, name, age, disease, risk, time, prediction)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user, name, age, disease, risk, time_now, prediction))
+
+        # ✅ Reports Table Update
+        cursor.execute("""
+            INSERT INTO reports (username, patient_name, disease, file_path, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (user, name, disease, file_path))
+
+        # ✅ Issue 2: analytics Table Update
+        # Standardize disease name for logic
+        d_type = "heart" if "heart" in disease.lower() else "diabetes" if "diabetes" in disease.lower() else ""
+        
+        cursor.execute("""
+            UPDATE analytics
+            SET 
+              totalpatients = totalpatients + 1,
+              heartpositive = heartpositive + CASE 
+                  WHEN ? = 'heart' AND ? = 'positive' THEN 1 ELSE 0 END,
+              diabetespositive = diabetespositive + CASE 
+                  WHEN ? = 'diabetes' AND ? = 'positive' THEN 1 ELSE 0 END
+            WHERE id = 1
+        """, (d_type, prediction, d_type, prediction))
+
+        conn.commit()
+        print(f"✅ Data consistent for {name}. All tables updated.")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Database error: {e}")
+    finally:
+        conn.close()
 
 # ==========================
 # USER FUNCTIONS
@@ -165,9 +257,9 @@ def get_history(user):
     conn = sqlite3.connect("hospital.db")
     cursor = conn.cursor()
 
-    # Assuming you store username in patients table
+    # Fetching from the new history table
     cursor.execute(
-        "SELECT name, age, disease, prediction FROM patients WHERE username=?",
+        "SELECT name, age, disease, risk FROM history WHERE username=? ORDER BY id DESC",
         (user,)
     )
     data = cursor.fetchall()

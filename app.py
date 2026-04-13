@@ -799,8 +799,12 @@ def heart_predict(user, name, age, sex, cp, bp, chol, fbs, thalach, smoking, exe
     chart      = risk_pie_chart(prob)
     cm_fig     = plot_cm(heart_cm, "Heart Disease — Confusion Matrix")
     metrics_html = cm_metrics(heart_cm, yh_test, heart_model.predict(Xh_test))
-    backend.save_history(user, name, age, "Heart Disease", risk)
+    
+    # NEW: Standardized Data Pipeline
+    prediction = "positive" if prob >= 0.5 else "negative"
     pdf = create_pdf(user, name, age, "Heart Disease", risk, measurements, prob)
+    backend.update_all_data(user, name, age, "Heart Disease", risk, prediction, pdf)
+    
     return html, pdf, chart, cm_fig, metrics_html
 
 def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, exercise, diet, family):
@@ -814,8 +818,12 @@ def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, 
     chart      = risk_pie_chart(prob)
     cm_fig     = plot_cm(diabetes_cm, "Diabetes — Confusion Matrix")
     metrics_html = cm_metrics(diabetes_cm, yd_test, diabetes_model.predict(Xd_test))
-    backend.save_history(user, name, age, "Diabetes Disease", risk)
+    
+    # NEW: Standardized Data Pipeline
+    prediction = "positive" if prob >= 0.5 else "negative"
     pdf = create_pdf(user, name, age, "Diabetes", risk, measurements, prob)
+    backend.update_all_data(user, name, age, "Diabetes", risk, prediction, pdf)
+    
     return html, pdf, chart, cm_fig, metrics_html
 
 def show_history(user):
