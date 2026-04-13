@@ -1,0 +1,1 @@
+INSERT INTO analytics VALUES (0,0,0);
