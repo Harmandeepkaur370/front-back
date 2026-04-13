@@ -134,10 +134,10 @@ def generate_report(prob, disease, name, age, measurements):
     html += precautions(disease, risk)
     return html, risk
 
-def create_pdf(name, age, disease, risk, measurements, prob):
+def create_pdf(user, name, age, disease, risk, measurements, prob):
     os.makedirs("reports", exist_ok=True)
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    file = os.path.join("reports", f"{name}_{disease}_{timestamp}_report.pdf")
+    file = os.path.join("reports", f"{user}_{name}_{disease}_{timestamp}_report.pdf")
     styles = getSampleStyleSheet()
     doc = SimpleDocTemplate(file, pagesize=(8.27*inch, 11.69*inch))
     elements = []

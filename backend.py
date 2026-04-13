@@ -22,6 +22,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS patients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
             name TEXT,
             age INTEGER,
             gender TEXT,

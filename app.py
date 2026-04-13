@@ -800,7 +800,7 @@ def heart_predict(user, name, age, sex, cp, bp, chol, fbs, thalach, smoking, exe
     cm_fig     = plot_cm(heart_cm, "Heart Disease — Confusion Matrix")
     metrics_html = cm_metrics(heart_cm, yh_test, heart_model.predict(Xh_test))
     backend.save_history(user, name, age, "Heart Disease", risk)
-    pdf = create_pdf(name, age, "Heart Disease", risk, measurements, prob)
+    pdf = create_pdf(user, name, age, "Heart Disease", risk, measurements, prob)
     return html, pdf, chart, cm_fig, metrics_html
 
 def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, exercise, diet, family):
@@ -815,7 +815,7 @@ def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, 
     cm_fig     = plot_cm(diabetes_cm, "Diabetes — Confusion Matrix")
     metrics_html = cm_metrics(diabetes_cm, yd_test, diabetes_model.predict(Xd_test))
     backend.save_history(user, name, age, "Diabetes Disease", risk)
-    pdf = create_pdf(name, age, "Diabetes", risk, measurements, prob)
+    pdf = create_pdf(user, name, age, "Diabetes", risk, measurements, prob)
     return html, pdf, chart, cm_fig, metrics_html
 
 def show_history(user):
@@ -1081,10 +1081,17 @@ footer,.built-with,.svelte-1lc7rdp { display:none !important; }
 .gradio-container tr:hover td { background:#F8FAFF !important; }
 """
 
-def _get_reports():
+def _get_reports(user):
     import datetime as _dt
     os.makedirs("reports", exist_ok=True)
-    files = sorted([f for f in os.listdir("reports") if f.endswith('.pdf')],
+    if not user:
+        return gr.update(value=[]), gr.update(choices=[])
+    
+    # Only list files that belong to the logged-in user (prefixed with username_)
+    all_files = os.listdir("reports")
+    user_files = [f for f in all_files if f.startswith(f"{user}_") and f.endswith('.pdf')]
+    
+    files = sorted(user_files,
                    key=lambda f: os.path.getmtime(os.path.join("reports",f)), reverse=True)
     rows  = [[f, _dt.datetime.fromtimestamp(os.path.getmtime(os.path.join("reports",f))).strftime("%Y-%m-%d %H:%M"),
               os.path.join("reports",f)] for f in files]
@@ -1329,7 +1336,7 @@ with gr.Blocks(fill_width=True) as app:
         inputs=[user_state,_pd_n,_pd_a,_pd_pr,_pd_gl,_pd_bp,_pd_bmi,_pd_ins,_pd_sm,_pd_ex,_pd_dt,_pd_fam],
         outputs=[_pd_out,_pd_pdf,_pd_ch,_pd_cm2,_pd_met])
     _ps_btn.click(symptom_checker, inputs=[_ps_chk], outputs=[_ps_out])
-    _hr_btn.click(_get_reports, outputs=[_hr_tbl,_hr_drp])
+    _hr_btn.click(_get_reports, inputs=[user_state], outputs=[_hr_tbl,_hr_drp])
     _hr_drp.change(lambda x:x, inputs=[_hr_drp], outputs=[_hr_fl])
     _up_btn.click(show_history, inputs=[user_state], outputs=[_up_tbl])
 
