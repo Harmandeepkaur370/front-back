@@ -2,11 +2,16 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay, precision_score, recall_score, f1_score
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib import colors
 import os
 import datetime
+import uuid
+import random
 from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import A4
+from reportlab.graphics.shapes import Drawing, Rect, Line
+from reportlab.graphics.barcode import qr
 
 # HELPERS
 # ============================================================
@@ -29,17 +34,17 @@ def risk_pie_chart(prob):
         colors=["#F43F5E", "#60A5FA"],
         autopct='%1.1f%%', startangle=90,
         wedgeprops=wedge_props,
-        textprops={'fontfamily': 'DM Sans', 'fontsize': 11}
+        textprops={'fontfamily': 'DejaVu Sans', 'fontsize': 11}
     )
     ax.set_title("Disease Risk Assessment", fontsize=13, fontweight='600', pad=14,
-                 fontfamily='DM Sans', color='#334155')
+                 fontfamily='DejaVu Sans', color='#334155')
     return fig
 
 def plot_cm(cm, title):
     fig, ax = plt.subplots(figsize=(4.5, 4), facecolor='none')
     ConfusionMatrixDisplay(cm).plot(ax=ax, colorbar=False)
     ax.set_title(title, fontsize=13, fontweight='600', pad=12,
-                 fontfamily='DM Sans', color='#334155')
+                 fontfamily='DejaVu Sans', color='#334155')
     fig.patch.set_alpha(0)
     return fig
 
@@ -87,16 +92,45 @@ def cm_metrics(cm, y_true, y_pred):
     html += "</table></div></div>"
     return html
 
-def precautions(disease, risk):
-    if disease == "Heart Disease":
-        if risk == "LOW":      tips = ["Regular aerobic exercise (30 min/day)", "Heart-healthy diet (fruits, vegetables, whole grains)", "Avoid smoking and second-hand smoke"]
-        elif risk == "MODERATE": tips = ["Monitor blood pressure weekly", "Reduce cholesterol through diet", "Schedule doctor checkup within a month"]
-        else:                  tips = ["Immediate cardiologist consultation", "Strict medication adherence", "ECG and stress test recommended"]
-    else:
-        if risk == "LOW":      tips = ["Balanced low-GI diet", "30-min daily exercise routine", "Maintain healthy body weight"]
-        elif risk == "MODERATE": tips = ["Reduce sugar and refined carbs", "Monitor blood glucose bi-weekly", "Consult a nutritionist"]
-        else:                  tips = ["Consult endocrinologist immediately", "Daily glucose monitoring required", "Insulin therapy evaluation"]
+    items = "".join(f"<li style='padding:8px 0;border-bottom:1px solid #F1F5F9;font-size:13px;color:#475569;display:flex;gap:12px;align-items:flex-start;'><span style='color:#2563EB;'>&rarr;</span><span>{t}</span></li>" for t in tips)
+    return f"""<div style='font-family:Inter,sans-serif;background:white;border-radius:12px;padding:24px;border:1px solid #E2E8F0;margin-top:12px'>
+      <h4 style='font-size:14px;font-weight:600;color:#0F172A;margin:0 0 12px 0;'>Clinical Recommendations</h4>
+      <ul style='list-style:none;padding:0;margin:0'>{items}</ul>
+    </div>"""
 
+CLINICAL_RANGES = {
+    "Blood Pressure": {"range": "80-120", "unit": "mmHg"},
+    "Cholesterol": {"range": "< 200", "unit": "mg/dL"},
+    "Glucose": {"range": "70-140", "unit": "mg/dL"},
+    "BMI": {"range": "18.5-24.9", "unit": "kg/m\u00b2"},
+    "Insulin": {"range": "0-150", "unit": "uIU/mL"},
+    "Max Heart Rate": {"range": "70-200", "unit": "bpm"},
+    "Fasting Blood Sugar >120": {"range": "No (0)", "unit": ""},
+    "Pregnancies": {"range": "0-5", "unit": ""},
+    "Age": {"range": "18-100", "unit": "yr"},
+    "Chest Pain": {"range": "Type 0", "unit": ""},
+}
+
+def get_precautions_text(disease, risk):
+    if disease == "Heart Disease":
+        if risk == "LOW":      return ["Regular aerobic exercise (30 min/day)", "Heart-healthy diet (fruits, vegetables, whole grains)", "Avoid smoking and second-hand smoke"]
+        elif risk == "MODERATE": return ["Monitor blood pressure weekly", "Reduce cholesterol through diet", "Schedule doctor checkup within a month"]
+        else:                  return ["Immediate cardiologist consultation", "Strict medication adherence", "ECG and stress test recommended"]
+    else:
+        if risk == "LOW":      return ["Balanced low-GI diet", "30-min daily exercise routine", "Maintain healthy body weight"]
+        elif risk == "MODERATE": return ["Reduce sugar and refined carbs", "Monitor blood glucose bi-weekly", "Consult a nutritionist"]
+        else:                  return ["Consult endocrinologist immediately", "Daily glucose monitoring required", "Insulin therapy evaluation"]
+
+def get_doctor_info():
+    names = ["Aravind Sharma", "Priya Nair", "Vikram Rathore", "Sanjay Gupta", "Ananya Verma"]
+    return {
+        "name": f"Dr. {random.choice(names)}",
+        "reg": f"MC/REG/{random.randint(10000, 99999)}",
+        "degree": "MBBS, MD - General Physician"
+    }
+
+def precautions_html(disease, risk):
+    tips = get_precautions_text(disease, risk)
     items = "".join(f"<li style='padding:8px 0;border-bottom:1px solid #F1F5F9;font-size:13px;color:#475569;display:flex;gap:12px;align-items:flex-start;'><span style='color:#2563EB;'>&rarr;</span><span>{t}</span></li>" for t in tips)
     return f"""<div style='font-family:Inter,sans-serif;background:white;border-radius:12px;padding:24px;border:1px solid #E2E8F0;margin-top:12px'>
       <h4 style='font-size:14px;font-weight:600;color:#0F172A;margin:0 0 12px 0;'>Clinical Recommendations</h4>
@@ -131,33 +165,237 @@ def generate_report(prob, disease, name, age, measurements):
       </div>
     </div>
     """
-    html += precautions(disease, risk)
+    html += precautions_html(disease, risk)
     return html, risk
 
-def create_pdf(user, name, age, disease, risk, measurements, prob):
+def create_pdf(user, name, age, gender, disease, risk, measurements, prob):
     os.makedirs("reports", exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    file = os.path.join("reports", f"{user}_{name}_{disease}_{timestamp}_report.pdf")
-    styles = getSampleStyleSheet()
-    doc = SimpleDocTemplate(file, pagesize=(8.27*inch, 11.69*inch))
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    filename_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_path = os.path.join("reports", f"{user}_{name}_{disease}_{filename_ts}_report.pdf")
+    patient_id = f"PAT-{str(uuid.uuid4())[:8].upper()}"
+
+    PAGE_W, PAGE_H = A4  # 595.27 x 841.89 pts
+    MARGIN_LR = 32
+    MARGIN_TB = 28
+    CONTENT_W = PAGE_W - 2 * MARGIN_LR  # ~531 pts
+
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=A4,
+        rightMargin=MARGIN_LR,
+        leftMargin=MARGIN_LR,
+        topMargin=MARGIN_TB,
+        bottomMargin=MARGIN_TB,
+    )
     elements = []
-    elements.append(Paragraph("AI MULTI-SPECIALITY HOSPITAL", styles["Title"]))
-    elements.append(Paragraph("Comprehensive Medical Risk Assessment Report",
-                               ParagraphStyle("Center", alignment=TA_CENTER, fontSize=16, spaceAfter=10)))
-    elements.append(Spacer(1, 20))
-    elements.append(Paragraph(f"Patient Name: {name}", styles["Normal"]))
-    elements.append(Paragraph(f"Age: {age}", styles["Normal"]))
-    elements.append(Paragraph(f"Disease Assessed: {disease}", styles["Normal"]))
-    elements.append(Spacer(1, 10))
-    data = [["Factor","Value"]] + [[k, str(v)] for k,v in measurements.items()]
-    table = Table(data, colWidths=[200, 200])
-    table.setStyle(TableStyle([
-        ("GRID",       (0,0),(-1,-1), 1, colors.grey),
-        ("BACKGROUND", (0,0),(-1,0),   colors.lightblue),
-        ("ALIGN",      (0,0),(-1,-1),  "CENTER")
+    styles = getSampleStyleSheet()
+
+    # ── Custom Styles (compact) ──────────────────────────────────
+    styles.add(ParagraphStyle(
+        name='HospitalName', fontSize=16, fontName='Helvetica-Bold',
+        textColor=colors.HexColor("#008080"), leading=18, spaceAfter=0))
+    styles.add(ParagraphStyle(
+        name='HospitalTagline', fontSize=7, fontName='Helvetica',
+        textColor=colors.HexColor("#64748B"), leading=9, spaceAfter=0))
+    styles.add(ParagraphStyle(
+        name='ContactInfo', fontSize=7.5, fontName='Helvetica',
+        textColor=colors.HexColor("#475569"), leading=10, alignment=TA_RIGHT))
+    styles.add(ParagraphStyle(
+        name='HospitalSub', fontSize=8.5, textColor=colors.grey,
+        spaceAfter=4, spaceBefore=2))
+    styles.add(ParagraphStyle(
+        name='SectionHeader', fontSize=11, fontName='Helvetica-Bold',
+        textColor=colors.HexColor("#334155"), spaceBefore=6, spaceAfter=3))
+    styles.add(ParagraphStyle(
+        name='Label', fontSize=8.5, fontName='Helvetica-Bold',
+        textColor=colors.HexColor("#64748B"), leading=10))
+    styles.add(ParagraphStyle(
+        name='Value', fontSize=8.5, fontName='Helvetica', leading=11))
+    styles.add(ParagraphStyle(
+        name='RiskBox', fontSize=11, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, textColor=colors.white, leading=14))
+    styles.add(ParagraphStyle(
+        name='BulletTip', fontSize=8.5, fontName='Helvetica',
+        leading=11, spaceBefore=1, spaceAfter=1))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 1. HEADER — hospital name LEFT, contact info RIGHT, no overlap
+    # ═══════════════════════════════════════════════════════════════
+    left_cell = Paragraph(
+        "AI MULTI-SPECIALITY HOSPITAL"
+        "<br/><font size='7' color='#64748B'>Comprehensive Diagnostic &amp; Wellness Centre</font>",
+        styles['HospitalName'])
+
+    right_cell = Paragraph(
+        "<b>Phone:</b> +91 98765 43210<br/>"
+        "<b>Email:</b> reports@aihospital.com<br/>"
+        "<b>Addr:</b> AI Innovation Hub, Tech City, 560001",
+        styles['ContactInfo'])
+
+    header_table = Table(
+        [[left_cell, right_cell]],
+        colWidths=[CONTENT_W * 0.58, CONTENT_W * 0.42])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
     ]))
-    elements.append(table)
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(f"Risk Assessment: {int(prob*100)}% ({risk})", styles["Normal"]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 2))
+
+    elements.append(Paragraph(
+        "Comprehensive Medical Risk Assessment Report", styles['HospitalSub']))
+
+    # Divider line
+    d = Drawing(CONTENT_W, 1)
+    d.add(Line(0, 0, CONTENT_W, 0, strokeColor=colors.HexColor("#CBD5E1"), strokeWidth=0.75))
+    elements.append(d)
+    elements.append(Spacer(1, 6))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. PATIENT INFORMATION (compact 4-col grid)
+    # ═══════════════════════════════════════════════════════════════
+    cw = [CONTENT_W * 0.18, CONTENT_W * 0.32, CONTENT_W * 0.18, CONTENT_W * 0.32]
+    patient_info = [
+        [Paragraph("Patient Name", styles['Label']), Paragraph(name, styles['Value']),
+         Paragraph("Patient ID", styles['Label']), Paragraph(patient_id, styles['Value'])],
+        [Paragraph("Age / Gender", styles['Label']), Paragraph(f"{age} yr / {gender}", styles['Value']),
+         Paragraph("Report Date", styles['Label']), Paragraph(timestamp, styles['Value'])],
+        [Paragraph("Disease Assessed", styles['Label']), Paragraph(disease, styles['Value']), "", ""]
+    ]
+    pt_table = Table(patient_info, colWidths=cw)
+    pt_table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor("#E2E8F0")),
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor("#F8FAFC")),
+        ('BACKGROUND', (2, 0), (2, -1), colors.HexColor("#F8FAFC")),
+        ('PADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(pt_table)
+    elements.append(Spacer(1, 6))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. CLINICAL PARAMETERS TABLE (compact)
+    # ═══════════════════════════════════════════════════════════════
+    elements.append(Paragraph("Clinical Parameters Analysis", styles['SectionHeader']))
+
+    table_data = [["Parameter", "Observed Value", "Normal Range", "Status"]]
+    status_style = ParagraphStyle('st', fontSize=8.5, leading=10)
+
+    for k, v in measurements.items():
+        display_k = k.replace("_", " ").title()
+        ref = CLINICAL_RANGES.get(display_k, {"range": "N/A", "unit": ""})
+
+        status = "Normal"
+        status_color = colors.HexColor("#16A34A")
+        try:
+            val_num = float(str(v).split()[0])
+            if display_k == "Blood Pressure" and val_num > 130:
+                status = "Abnormal"; status_color = colors.HexColor("#DC2626")
+            elif display_k == "Glucose" and val_num > 140:
+                status = "Abnormal"; status_color = colors.HexColor("#DC2626")
+            elif display_k == "Cholesterol" and val_num > 240:
+                status = "Abnormal"; status_color = colors.HexColor("#DC2626")
+            elif display_k == "Bmi" and (val_num < 18 or val_num > 30):
+                status = "Abnormal"; status_color = colors.HexColor("#DC2626")
+        except:
+            pass
+
+        table_data.append([
+            display_k,
+            f"{v} {ref['unit']}",
+            f"{ref['range']} {ref['unit']}",
+            Paragraph(f"<b>{status}</b>", ParagraphStyle('s', textColor=status_color, fontSize=8.5, leading=10))
+        ])
+
+    param_cw = [CONTENT_W * 0.30, CONTENT_W * 0.24, CONTENT_W * 0.26, CONTENT_W * 0.20]
+    param_table = Table(table_data, colWidths=param_cw)
+    param_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#008080")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('PADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]))
+    elements.append(param_table)
+    elements.append(Spacer(1, 6))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. RISK ASSESSMENT (compact banner)
+    # ═══════════════════════════════════════════════════════════════
+    elements.append(Paragraph("Diagnostic Risk Assessment", styles['SectionHeader']))
+
+    percent = int(prob * 100)
+    risk_color = colors.HexColor("#16A34A")
+    if risk == "MODERATE":
+        risk_color = colors.HexColor("#EA580C")
+    elif risk == "HIGH":
+        risk_color = colors.HexColor("#DC2626")
+
+    risk_data = [[Paragraph(f"RISK LEVEL: {risk} ({percent}%)", styles['RiskBox'])]]
+    risk_table = Table(risk_data, colWidths=[CONTENT_W], rowHeights=[24])
+    risk_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), risk_color),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROUNDEDCORNERS', [8, 8, 8, 8]),
+    ]))
+    elements.append(risk_table)
+    elements.append(Spacer(1, 6))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 5. DOCTOR'S REMARKS (compact)
+    # ═══════════════════════════════════════════════════════════════
+    elements.append(Paragraph("Doctor's Remarks", styles['SectionHeader']))
+    remarks = (
+        f"Based on the clinical analysis, the patient shows a <b>{risk}</b> risk of {disease}. "
+        f"The observed parameters indicate {('minor' if risk == 'LOW' else 'significant')} deviations "
+        f"from the standard baseline. Preventive measures and lifestyle modifications are strongly advised."
+    )
+    elements.append(Paragraph(remarks, styles['Value']))
+    elements.append(Spacer(1, 4))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 6. RECOMMENDATIONS (inline bullets)
+    # ═══════════════════════════════════════════════════════════════
+    elements.append(Paragraph("Clinical Recommendations", styles['SectionHeader']))
+    for tip in get_precautions_text(disease, risk):
+        elements.append(Paragraph(f"• {tip}", styles['BulletTip']))
+
+    elements.append(Spacer(1, 14))
+
+    # ═══════════════════════════════════════════════════════════════
+    # 7. SIGNATURE BLOCK (compact, right-aligned)
+    # ═══════════════════════════════════════════════════════════════
+    doc_info = get_doctor_info()
+    sig_data = [
+        ["", "____________________________"],
+        ["", Paragraph(f"<b>{doc_info['name']}</b>",
+                       ParagraphStyle('doc', alignment=TA_CENTER, fontSize=9, leading=11))],
+        ["", Paragraph(f"{doc_info['degree']}<br/>Reg No: {doc_info['reg']}",
+                       ParagraphStyle('docinfo', alignment=TA_CENTER, fontSize=7, textColor=colors.grey, leading=9))]
+    ]
+    sig_table = Table(sig_data, colWidths=[CONTENT_W - 160, 160])
+    sig_table.setStyle(TableStyle([
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]))
+    elements.append(sig_table)
+
+    # Footer / Disclaimer
+    elements.append(Spacer(1, 6))
+    elements.append(Paragraph(
+        "<i>Note: This is an AI-generated assessment report and should be verified by a medical professional.</i>",
+        ParagraphStyle('Footer', fontSize=7, textColor=colors.HexColor("#94A3B8"), alignment=TA_CENTER)))
+
+    # ── Build PDF (single-page guard) ────────────────────────────
     doc.build(elements)
-    return file
+    return file_path

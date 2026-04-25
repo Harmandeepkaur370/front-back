@@ -802,12 +802,12 @@ def heart_predict(user, name, age, sex, cp, bp, chol, fbs, thalach, smoking, exe
     
     # NEW: Standardized Data Pipeline
     prediction = "positive" if prob >= 0.5 else "negative"
-    pdf = create_pdf(user, name, age, "Heart Disease", risk, measurements, prob)
+    pdf = create_pdf(user, name, age, sex, "Heart Disease", risk, measurements, prob)
     backend.update_all_data(user, name, age, "Heart Disease", risk, prediction, pdf)
     
     return html, pdf, chart, cm_fig, metrics_html
 
-def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, exercise, diet, family):
+def diabetes_predict(user, name, age, gender, preg, glucose, bp, bmi, insulin, smoking, exercise, diet, family):
     arr = pd.DataFrame([[preg,glucose,bp,0,insulin,bmi,0,age]], columns=X_diabetes.columns)
     prob = diabetes_model.predict_proba(arr)[0][1]
     prob = lifestyle_modifier(prob, smoking, exercise, diet, family)
@@ -821,7 +821,7 @@ def diabetes_predict(user, name, age, preg, glucose, bp, bmi, insulin, smoking, 
     
     # NEW: Standardized Data Pipeline
     prediction = "positive" if prob >= 0.5 else "negative"
-    pdf = create_pdf(user, name, age, "Diabetes", risk, measurements, prob)
+    pdf = create_pdf(user, name, age, gender, "Diabetes", risk, measurements, prob)
     backend.update_all_data(user, name, age, "Diabetes", risk, prediction, pdf)
     
     return html, pdf, chart, cm_fig, metrics_html
@@ -1260,6 +1260,7 @@ with gr.Blocks(fill_width=True) as app:
                         with gr.Row():
                             _pd_n = gr.Textbox(label="Full Name", placeholder="e.g. Jane Doe")
                             _pd_a = gr.Slider(18,100, value=40, step=1, label="Age (years)")
+                            _pd_s = gr.Radio(["Male","Female"], label="Biological Sex", value="Female")
                     with gr.Column(elem_classes="glass-card"):
                         gr.HTML('<div class="group-title">Metabolic Parameters</div>')
                         with gr.Row():
@@ -1341,7 +1342,7 @@ with gr.Blocks(fill_width=True) as app:
         inputs=[user_state,_ph_n,_ph_a,_ph_s,_ph_cp,_ph_bp,_ph_chol,_ph_fbs,_ph_thal,_ph_sm,_ph_ex,_ph_dt,_ph_fam],
         outputs=[_ph_out,_ph_pdf,_ph_ch,_ph_cm2,_ph_met])
     _pd_btn.click(diabetes_predict,
-        inputs=[user_state,_pd_n,_pd_a,_pd_pr,_pd_gl,_pd_bp,_pd_bmi,_pd_ins,_pd_sm,_pd_ex,_pd_dt,_pd_fam],
+        inputs=[user_state,_pd_n,_pd_a,_pd_s,_pd_pr,_pd_gl,_pd_bp,_pd_bmi,_pd_ins,_pd_sm,_pd_ex,_pd_dt,_pd_fam],
         outputs=[_pd_out,_pd_pdf,_pd_ch,_pd_cm2,_pd_met])
     _ps_btn.click(symptom_checker, inputs=[_ps_chk], outputs=[_ps_out])
     _hr_btn.click(_get_reports, inputs=[user_state], outputs=[_hr_tbl,_hr_drp])
